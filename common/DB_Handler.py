@@ -8,11 +8,12 @@ class dataQuery(object):
     def __init__(self):
         try:
             self.conn = MySQLdb.connect(host='10.4.67.151', port=3306, user='root', password='iflytekmysql', db='mhk_kf_beifen',use_unicode=True, charset='utf8')
+            self.conn.autocommit(True)
             self.cursor = self.conn.cursor()
-            self.ZUOWEN_ID = None
-            self.TIANKONG_ID = None
-            self.WENTIYI_ID = None
-            self.WENTIER_ID = None
+            # self.ZUOWEN_ID = None
+            # self.TIANKONG_ID = None
+            # self.WENTIYI_ID = None
+            # self.WENTIER_ID = None
 
             self.getStaticData()
         except Exception,e:
@@ -177,17 +178,17 @@ class dataQuery(object):
                 self.cursor.execute(sql_marker_id)
                 marker_dbID = self.cursor.fetchone()
                 if marker_dbID:
-                    sql_interval_1 = "SELECT CONVERT(diff_time,int) FROM sys_diff_time WHERE exam_marker_id='{0}'".format(marker_dbID[0])
+                    sql_interval_1 = "SELECT CONVERT(diff_time,UNSIGNED) diff_time FROM sys_diff_time WHERE exam_marker_id='{0}'".format(marker_dbID[0])
                     self.cursor.execute(sql_interval_1)
                     interval1 = self.cursor.fetchone()
                     if interval1:
-                        return interval1
+                        return interval1[0]
                     else:
                         sql_interval_2 = "SELECT mark_time FROM sys_question_type WHERE id=(SELECT question_type_id FROM sys_marker_status WHERE userid='{0}');".format(marker_dbID[0])
                         self.cursor.execute(sql_interval_2)
                         interval2 = self.cursor.fetchone()
                         if interval2:
-                            return interval2
+                            return interval2[0]
                         else:
                             return 60
                 else:
@@ -217,6 +218,34 @@ class dataQuery(object):
             return marker_dbid
         except Exception,e:
             print e
+
+    def getRandomMarkerId_Zuowen_Existing_Unscored_Shiping_Tasks(self):
+        try:
+            sql_random_marker_dbid = "SELECT marker_id FROM mark_record WHERE task_type='2' AND question_type_id='{0}' AND mark_status='0' " \
+                                     "GROUP BY marker_id ORDER BY RAND() LIMIT 1".format(self.ZUOWEN_ID)
+            self.cursor = self.conn.cursor(MySQLdb.cursors.Cursor)
+            self.cursor.execute(sql_random_marker_dbid)
+            marker_dbid = self.cursor.fetchone()[0]
+            return marker_dbid
+        except Exception,e:
+            print e
+
+    def getShipingTaskStatus_By_qType_MarkerId_ShowNo(self,qtypeid,markerid,showno):
+        try:
+            if qtypeid not in [self.ZUOWEN_ID,self.WENTIYI_ID,self.WENTIER_ID]:
+                raise ValueError("Question type id does not exist.")
+            if not isinstance(showno,basestring):
+                raise TypeError("Assigned show No is not string type.")
+            if not isinstance(markerid,basestring):
+                raise TypeError("Assigned marker ID is not string type.")
+            sql = "SELECT task_id,marker_id,mark_status,score FROM mark_record WHERE task_type='2' AND question_type_id='{0}'" \
+                  " AND marker_id='{1}' AND show_no={2}".format(qtypeid,markerid,showno)
+            self.cursor = self.conn.cursor(MySQLdb.cursors.DictCursor)
+            self.cursor.execute(sql)
+            return self.cursor.fetchone()
+        except Exception,e:
+            print e
+
 
     def getBatchNo_ZuowenShiping_Should_Be_Loaded_By_MarkerId(self,markerid):
         try:

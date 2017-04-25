@@ -3,6 +3,7 @@
 import os
 import sys
 from datetime import datetime
+from random import randint
 from time import sleep
 import HTMLTestRunner
 from selenium import webdriver
@@ -138,7 +139,7 @@ class tc_zuowen_shiping_data_consistancy(unittest.TestCase):
             self.driver.save_screenshot(os.sep.join([screenshot_folder,fname]))
         self.driver.quit()
 
-    def test_data_consistancy(self):
+    def test_01_data_consistancy(self):
         pageLogin = LoginPage(self.driver)
         q_marker_db_id = self.db.getRandomMarkerID_Zuowen_Eixsting_Shiping_Tasks()
         q_marker_login_id = self.db.getMarker_loginID_By_DbID(q_marker_db_id)
@@ -166,9 +167,52 @@ class tc_zuowen_shiping_data_consistancy(unittest.TestCase):
             index = (index+1)%task_list_len
             pageShiping.click_task(index)
 
+
+class tc_zuowen_shiping_score(unittest.TestCase):
+    def setUp(self):
+        self.driver = webdriver.Chrome()
+        self.db = dataQuery()
+
+    def tearDown(self):
+        if sys.exc_info()[0]:
+            test_method_name = self._testMethodName
+            fname = '_'.join([test_method_name, datetime.now().strftime("%Y%m%d%H%M%S.png")])
+            screenshot_folder = os.sep.join([parent,'screenshots'])
+            if not os.path.exists(screenshot_folder):
+                os.mkdir(screenshot_folder)
+            self.driver.save_screenshot(os.sep.join([screenshot_folder,fname]))
+        self.driver.quit()
+
+    def test_01_socre_on_unscored_task(self):
+        # 对未打分的试评任务打分
+        pageLogin = LoginPage(self.driver)
+        q_marker_db_id = self.db.getRandomMarkerId_Zuowen_Existing_Unscored_Shiping_Tasks()
+        q_marker_login_id = self.db.getMarker_loginID_By_DbID(q_marker_db_id)
+        pageLogin.set_uName(q_marker_login_id)
+        pageLogin.set_pwd('1')
+        pageLogin.select_role(u'阅卷老师')
+        pageLogin.click_btnLogin()
+
+        pageShiping = ZuowenShiping(self.driver)
+        selected_rowid = pageShiping.get_selected_task_row()
+        selected_showno = pageShiping.collect_showno_list()[selected_rowid]
+        task_status_before = self.db.getShipingTaskStatus_By_qType_MarkerId_ShowNo(self.db.ZUOWEN_ID,q_marker_db_id,selected_showno)
+        # 未打过分，状态应为'0'
+        self.assertEqual(task_status_before['mark_status'],'0')
+        to_score = randint(0,6)
+        sleep(float(self.db.getMarkInterval_By_MarkID(q_marker_login_id)))
+        pageShiping.score(to_score)
+        sleep(1)
+        task_status_after = self.db.getShipingTaskStatus_By_qType_MarkerId_ShowNo(self.db.ZUOWEN_ID,q_marker_db_id,selected_showno)
+        # 打分后，该任务的状态应变为“1”--已打分
+        self.assertEqual(task_status_after['mark_status'],'1')
+        # 打的分已存入数据库
+        self.assertEqual(int(task_status_after['score']), to_score)
+
 suite = unittest.TestSuite()
 suite.addTests(unittest.makeSuite(tc_zuowen_shiping_task_load))
 suite.addTests(unittest.makeSuite(tc_zuowen_shiping_data_consistancy))
+suite.addTests(unittest.makeSuite(tc_zuowen_shiping_score))
 unittest.TextTestRunner(verbosity=2)
 
 target_folder = os.sep.join([parent,'reports'])
